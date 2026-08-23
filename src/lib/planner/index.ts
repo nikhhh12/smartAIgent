@@ -115,6 +115,105 @@ export function isPrivateOrInternalHost(hostOrUrl: string): boolean {
   return false;
 }
 
+// Action-specific Missing Information Helper
+export function getMissingInformationForAction(
+  suggestedTool: string,
+  toolInput: Record<string, unknown>,
+  missingInformation: string[]
+): string[] {
+  const missing: string[] = [];
+
+  switch (suggestedTool) {
+    case "createTask": {
+      const hasTitle = Boolean(toolInput.title || toolInput.description);
+      if (!hasTitle) {
+        missing.push("Task title or description");
+      }
+      break;
+    }
+    case "createReminder": {
+      const hasText = Boolean(toolInput.reminderText || toolInput.reminder || toolInput.text);
+      const hasDue = Boolean(toolInput.dueDate || toolInput.due || toolInput.date);
+      if (!hasText) missing.push("Reminder text");
+      if (!hasDue) missing.push("Reminder due date");
+      break;
+    }
+    case "draftCommunication": {
+      const hasRecipient = Boolean(toolInput.recipient || toolInput.to || toolInput.email);
+      const hasBody = Boolean(toolInput.body || toolInput.content || toolInput.message || toolInput.text);
+
+      if (!hasRecipient) {
+        missing.push("Recipient email address or target contact");
+      }
+      if (!hasBody) {
+        missing.push("Specific discussion points or email body text");
+      }
+
+      for (const item of missingInformation) {
+        const lower = item.toLowerCase();
+        if (
+          lower.includes("email") ||
+          lower.includes("recipient") ||
+          lower.includes("discussion") ||
+          lower.includes("takeaway") ||
+          lower.includes("body") ||
+          lower.includes("timeline") ||
+          lower.includes("communication")
+        ) {
+          if (!missing.includes(item)) {
+            missing.push(item);
+          }
+        }
+      }
+      break;
+    }
+    case "deleteDeployment": {
+      const hasId = Boolean(toolInput.deploymentId || toolInput.id);
+      if (!hasId) {
+        missing.push("Specific deployment ID to delete");
+      }
+      for (const item of missingInformation) {
+        const lower = item.toLowerCase();
+        if (lower.includes("deployment") || lower.includes("platform") || lower.includes("service")) {
+          if (!missing.includes(item)) {
+            missing.push(item);
+          }
+        }
+      }
+      break;
+    }
+    case "websiteCheck": {
+      const hasUrl = Boolean(toolInput.url);
+      if (!hasUrl) {
+        missing.push("Target website URL");
+      }
+      break;
+    }
+    case "searchStoredWork": {
+      const hasQuery = Boolean(toolInput.query || toolInput.search || toolInput.term || toolInput.q);
+      if (!hasQuery) {
+        missing.push("Search query or term");
+      }
+      break;
+    }
+    case "generateMarkdownBrief": {
+      const hasTopic = Boolean(toolInput.title || toolInput.topic || toolInput.overview);
+      if (!hasTopic) {
+        missing.push("Topic or overview for markdown brief");
+      }
+      break;
+    }
+    default: {
+      if (missingInformation.length > 0) {
+        missing.push(...missingInformation);
+      }
+      break;
+    }
+  }
+
+  return missing;
+}
+
 export function planExecution(
   interpretation: WorkflowInterpretationType
 ): PlannedActionItem[] {
@@ -145,15 +244,19 @@ export function planExecution(
       toolInput.dueDate = resolveRelativeDueDate(String(toolInput.dueDate), deadline);
     }
 
-    // 1. Missing Required Information Priority Check (Rule 1)
-    const isMissingInfoRelated = missingInformation.length > 0;
+    // 1. Missing Required Information Priority Check (Rule 1 - Action Specific)
+    const actionMissingInfo = getMissingInformationForAction(
+      suggestedTool,
+      toolInput,
+      missingInformation
+    );
 
-    if (isMissingInfoRelated) {
+    if (actionMissingInfo.length > 0) {
       return {
         id: item.id,
         description: item.description,
         category: "REQUIRES_CLARIFICATION",
-        reason: `Missing critical required information: ${missingInformation.join("; ")}`,
+        reason: `Missing critical required information: ${actionMissingInfo.join("; ")}`,
         toolName: suggestedTool !== "none" ? suggestedTool : null,
         toolInput,
         status: "NEEDS_CLARIFICATION",

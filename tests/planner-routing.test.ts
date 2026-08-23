@@ -179,4 +179,67 @@ describe("Altibbe Agent Execution Engine Security & Policy Tests", () => {
     expect(plan[0].category).toBe("REQUIRES_CLARIFICATION");
     expect(plan[0].status).toBe("NEEDS_CLARIFICATION");
   });
+
+  it("TEST 11 — Multi-action ABC Corp workflow routes missing information on action-specific basis", () => {
+    const abcCorpInterp: WorkflowInterpretationType = {
+      taskTitle: "ABC Corp Pricing Update & Discussion Follow-up",
+      summary: "Spoke to ABC Corp regarding updated pricing document needed by Friday.",
+      priority: "high",
+      deadline: "Friday",
+      actionItems: [
+        {
+          id: "act-biz-1",
+          description: "Create internal task for team to update pricing document by Friday",
+          priority: "high",
+          requiresHumanConfirmation: false,
+          suggestedTool: "createTask",
+          toolInput: {
+            title: "Update ABC Corp Pricing Document",
+            description: "Prepare and review updated pricing document for ABC Corp.",
+            priority: "high",
+            deadline: "Friday",
+          },
+        },
+        {
+          id: "act-biz-2",
+          description: "Draft thank-you and follow-up communication to ABC Corp",
+          priority: "high",
+          requiresHumanConfirmation: true,
+          suggestedTool: "draftCommunication",
+          toolInput: {
+            recipient: "ABC Corp Contact",
+            subject: "Thank You for the Discussion — Pricing Update",
+          },
+        },
+        {
+          id: "act-biz-3",
+          description: "Schedule 7-day follow-up reminder for ABC Corp pricing request",
+          priority: "medium",
+          requiresHumanConfirmation: false,
+          suggestedTool: "createReminder",
+          toolInput: {
+            reminderText: "Follow up with ABC Corp on updated pricing document delivery",
+            dueDate: "7 days from today",
+          },
+        },
+      ],
+      missingInformation: [
+        "Specific discussion points and meeting takeaways to include in the email body",
+      ],
+      automatableActions: [
+        "Create internal task for team to update pricing document by Friday",
+        "Schedule 7-day follow-up reminder for ABC Corp pricing request",
+      ],
+      humanConfirmationRequired: [
+        "Draft thank-you and follow-up communication to ABC Corp",
+      ],
+    };
+
+    const plan = planExecution(abcCorpInterp);
+
+    expect(plan.length).toBe(3);
+    expect(plan[0].category).toBe("EXECUTE_AUTOMATICALLY");
+    expect(plan[1].category).toBe("REQUIRES_CLARIFICATION");
+    expect(plan[2].category).toBe("EXECUTE_AUTOMATICALLY");
+  });
 });
