@@ -124,7 +124,7 @@ stateDiagram-v2
 - **Database**: SQLite (`better-sqlite3` + `drizzle-orm`)
 - **Validation**: Zod (Structured LLM output parsing & payload validation)
 - **AI Integration**: Google Generative AI SDK (`gemini-3.6-flash` with candidate fallback list) + Deterministic Fallback Engine for keyless execution
-- **Testing**: Vitest automated test suite (14 passing unit & integration tests)
+- **Testing**: Vitest automated test suite (15 passing unit & integration tests)
 
 ---
 
@@ -241,8 +241,8 @@ Run the full test suite with:
 npm test
 ```
 
-The application includes 14 passing automated tests across 3 test suites:
-- `tests/planner-routing.test.ts` (10 tests): Safe task auto-execution, destructive action HITL gating, prompt-injection immunity, missing information routing (`REQUIRES_CLARIFICATION`), approval/rejection transitions, idempotency, and email body extraction.
+The application includes 15 passing automated tests across 3 test suites:
+- `tests/planner-routing.test.ts` (11 tests): Safe task auto-execution, destructive action HITL gating, prompt-injection immunity, missing information routing (`REQUIRES_CLARIFICATION`), approval/rejection transitions, idempotency, and email body extraction.
 - `tests/ssrf-protection.test.ts` (2 tests): Website check URL verification and private/internal IP blocking (`127.0.0.1`, `10.0.0.1`).
 - `tests/llm-validation.test.ts` (2 tests): Zod schema parsing and structural validation.
 
@@ -285,16 +285,100 @@ The application includes 14 passing automated tests across 3 test suites:
 
 ---
 
-## Relay, Documentation & Reproduction Instructions
+## Relay, Documentation & Production Readiness
 
-### A. AI Relay & Evidence
-Contains the working context, reproducible evidence files ([`./evidence/scenario-1.md`](./evidence/scenario-1.md), [`./evidence/scenario-2.md`](./evidence/scenario-2.md), [`./evidence/scenario-3.md`](./evidence/scenario-3.md)), and complete activity logs required for another engineer to review execution without context loss.
+### A. AI Relay
 
-### B. Reproduction Instructions
-Another engineer can clone this repository, run `npm install`, copy `.env.example`, execute `npm test` to verify all 14 tests pass, and launch `npm run dev` to interact with the prototype locally.
+The AI Relay contains the working context required to understand, reproduce, and continue the implementation across workflow executions, including:
+- original work request
+- structured LLM interpretation
+- execution plan
+- tool inputs/outputs
+- approval decisions
+- activity trace
+- reproducible evidence (e.g., [`./evidence/scenario-1.md`](./evidence/scenario-1.md), [`./evidence/scenario-2.md`](./evidence/scenario-2.md), [`./evidence/scenario-3.md`](./evidence/scenario-3.md))
 
-### C. Untrusted Content & Boundary Isolation
-External inputs are wrapped in `<untrusted_content>` tags during LLM interpretation. They cannot override system instructions or invoke unauthorized tools because tool execution is gated behind strict Zod parsing, deterministic backend category routing, and a hardcoded Tool Permission Matrix.
+Private model chain-of-thought is NOT included or required in the relay artifacts.
 
-### D. Honest Transparency
-The system explicitly distinguishes between checks actually performed vs unsupported checks (e.g. in `websiteCheck`), logs real failure states (e.g. SSRF private IP rejections), and never claims an action succeeded when it failed.
+### B. Founder / Control Layer
+
+The control context provides concise summary visibility into:
+- key engineering decisions
+- current operational status
+- system exceptions
+- architectural risks
+- open design questions
+- material code and schema changes
+
+*(Note: There is no separate Founder/Control application; this status is reflected directly through system state logs, activity traces, and repository documentation).*
+
+Important implementation and architectural decisions are promoted directly into the repository through README documentation, source code, automated tests, and evidence files.
+
+### C. GitHub as Canonical Source of Truth
+
+GitHub serves as the canonical, versioned source of truth for:
+- implementation code
+- system documentation
+- automated tests
+- security policies and boundary decisions
+- verification evidence and test runs
+
+Durable design decisions, safety boundaries, and workflow specifications are committed directly to the repository rather than remaining locked in transient AI conversation histories or external chat logs.
+
+### D. Reproduction & Continuation
+
+Another engineer or AI assistant can reproduce, verify, and continue work on this project using the following standard workflow:
+
+```bash
+git clone git clone https://github.com/nikhhh12/smartAIgent.git
+cd smartAIgent
+npm install
+cp .env.example .env
+npm test
+npm run dev
+```
+
+- Run `npm test` to execute the full automated Vitest test suite (15 passing tests across 3 test files).
+- Run `npm run build` to verify Next.js compilation and TypeScript type checking.
+- Inspect pre-generated scenario evidence in `./evidence/scenario-1.md`, `./evidence/scenario-2.md`, and `./evidence/scenario-3.md`.
+
+### E. Validation Discipline & Avoiding AI Rabbit Holes
+
+To avoid AI rabbit holes, hallucinated fixes, and unexpected regressions, AI-generated implementations and code suggestions are treated as untrusted until validated through concrete, empirical checks.
+
+Validation mechanisms relied upon include:
+- strict Zod schema parsing of LLM outputs
+- deterministic backend planner routing rules
+- automated Vitest test suite (`npm test`)
+- production Next.js build compilation (`npm run build`)
+- manual runtime verification in browser/API
+- persisted workflow state transitions and real-time activity traces
+
+The engineering validation approach follows a disciplined 6-step workflow:
+1. Reproduce the issue or baseline behavior empirically.
+2. Identify the smallest relevant code path or component.
+3. Make the smallest necessary change to solve the specific issue.
+4. Run focused unit/integration tests covering the modified logic.
+5. Run the full test suite (`npm test`) and production build (`npm run build`).
+6. Verify the actual runtime behavior in the application UI/API.
+
+### F. Untrusted Content & Safety Boundaries
+
+This implementation enforces strict boundary isolation between untrusted inputs and system tool execution:
+- User prompts and external website content are treated as untrusted data (wrapped inside `<untrusted_content>` tags during LLM processing).
+- Repository text, prompt history, or transcript text are not treated as authoritative instructions to bypass security controls.
+- Untrusted content cannot directly invoke internal tools.
+- LLM output is parsed and validated against strict Zod schemas.
+- Deterministic backend routing in TypeScript controls tool execution paths.
+- A hardcoded Tool Permission Matrix enforces category routing (`EXECUTE_AUTOMATICALLY`, `PREPARE_FOR_HUMAN_REVIEW`, `REQUIRES_CLARIFICATION`, `CANNOT_EXECUTE_WITH_AVAILABLE_TOOLS`).
+- High-risk destructive actions (`deleteDeployment`) and external communication (`draftCommunication`) strictly require explicit human approval regardless of prompt instructions.
+- SSRF protection in `websiteCheck` validates target URLs, resolves DNS, and blocks private/internal IP ranges (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`, `169.254.0.0/16`, `::1`).
+
+### G. Incomplete / Unsafe Areas
+
+The following known technical limitations and boundaries apply to this prototype submission:
+- **Client-Side JS Rendering**: `websiteCheck` performs static HTTP inspection of HTML and headers; it does not execute client-side JavaScript for Single Page Applications (SPAs).
+- **Prototype Persistence**: Uses local SQLite (`better-sqlite3`) for zero-config local persistence; a production multi-tenant deployment would require migration to PostgreSQL.
+- **Email Communication**: `draftCommunication` creates and stores drafts in SQLite for review; direct outbound SMTP/API email transmission is not connected.
+- **External Webhooks**: External integrations (e.g., Slack, Jira, webhooks) are not implemented in this version.
+- **Advanced Execution**: Multi-step tool dependency chaining and granular multi-role RBAC are future enhancement targets.
