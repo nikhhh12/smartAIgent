@@ -41,7 +41,7 @@ flowchart TD
     LLM -->|3. Structured JSON| Validator[Zod Schema Validator]
     
     Validator -->|Success| BackendPlanner[Deterministic Backend Planner]
-    Validator -->|Fail (Max 1 Retry)| FailState[Workflow Status: FAILED]
+    Validator -->|Validation Failure| FailState[Workflow Status: FAILED]
     
     subgraph Backend Validation & Authority
         BackendPlanner -->|Check Missing Info| Rule1{Missing Required Info?}
@@ -74,28 +74,39 @@ flowchart TD
 
 ## Explicit Workflow State Machine
 
-$$\text{status} \in \{ \text{INTAKE}, \text{INTERPRETED}, \text{PLANNED}, \text{EXECUTING}, \text{AWAITING\_APPROVAL}, \text{EXECUTING\_APPROVED\_ACTION}, \text{REQUIRES\_CLARIFICATION}, \text{COMPLETED}, \text{REJECTED}, \text{FAILED} \}$$
+```mermaid
+stateDiagram-v2
+    [*] --> INTAKE
+    INTAKE --> INTERPRETED
+    INTERPRETED --> PLANNED
+    
+    PLANNED --> EXECUTING: Safe Action
+    PLANNED --> REQUIRES_CLARIFICATION: Missing Info
+    
+    EXECUTING --> COMPLETED: Tool Success
+    EXECUTING --> FAILED: Tool / Runtime Error
+    EXECUTING --> AWAITING_APPROVAL: Requires Human Approval
+    
+    AWAITING_APPROVAL --> EXECUTING_APPROVED_ACTION: Approve
+    AWAITING_APPROVAL --> EDITED_AWAITING_APPROVAL: Edit Draft
+    AWAITING_APPROVAL --> REJECTED: Reject
+    
+    EDITED_AWAITING_APPROVAL --> AWAITING_APPROVAL
+    
+    EXECUTING_APPROVED_ACTION --> COMPLETED: Tool Success
+    EXECUTING_APPROVED_ACTION --> FAILED: Tool Error
+```
 
-$$\begin{array}{rcccl}
-& & \text{REQUIRES\_CLARIFICATION} & & \\
-& & \uparrow & & \\
-\text{INTAKE} \longrightarrow \text{INTERPRETED} \longrightarrow \text{PLANNED} & \longrightarrow & \text{EXECUTING} & \xrightarrow{\text{Success}} & \text{COMPLETED} \\
-& & \downarrow & \searrow \scriptstyle{\text{Tool Error}} & \uparrow \scriptstyle{\text{Success}} \\
-& & \text{AWAITING\_APPROVAL} & \xrightarrow{\text{Approve}} & \text{EXECUTING\_APPROVED\_ACTION} \\
-& & \Big\downarrow \scriptstyle{\text{Edit}} & \searrow \scriptstyle{\text{Reject}} & \downarrow \scriptstyle{\text{Tool Error}} \\
-& & \text{EDITED / AWAITING\_APPROVAL} & & \text{REJECTED} \quad \text{FAILED}
-\end{array}$$
-
-- **`COMPLETED`**: Reached when all automatable or approved actions execute successfully.
-- **`REJECTED`**: Reached when a human explicitly rejects a pending action item in the approval queue.
-- **`FAILED`**: Reached only when a genuine validation error, network error, or tool execution failure occurs.
+- `COMPLETED`: Reached when all automatable or approved actions execute successfully.
+- `REJECTED`: Reached when a human explicitly rejects a pending action item in the approval queue.
+- `FAILED`: Reached only when a genuine validation error, network error, or tool execution failure occurs.
 
 ---
 
 ## Tool Permission Matrix
 
 | Tool Name | Automatic (`EXECUTE_AUTOMATICALLY`) | Human Approval (`PREPARE_FOR_HUMAN_REVIEW`) | Requires Clarification (`REQUIRES_CLARIFICATION`) | Rejected / Unsafe (`UNSAFE_INPUT`) |
-| :--- | :---: | :---: | :--- | :--- |
+|---|---|---|---|---|
 | `createTask` | ✅ (Complete args) | ❌ | If title/description missing | N/A |
 | `draftCommunication` | ❌ (Always sensitive) | ✅ (Always) | If recipient or message context missing | N/A |
 | `deleteDeployment` | ❌ (High-risk destructive) | ✅ (Always) | If deployment ID or platform missing | N/A |
@@ -160,7 +171,7 @@ $$\begin{array}{rcccl}
 ## Manual Acceptance / Verification Scenarios
 
 | Scenario | Input Prompt / Action | Expected Behavior & Result | Status |
-| :--- | :--- | :--- | :---: |
+|---|---|---|---|
 | **1. Safe Task** | *"Create a task for the frontend team to fix the authentication bug on the login page by Friday."* | `createTask` auto-executes. Workflow status transitions to `COMPLETED`. Activity trace logs `TOOL_COMPLETED`. | ✅ Verified |
 | **2. Destructive Task** | *"Delete production deployment prod-api-2026-08-22 on Vercel."* | `deleteDeployment` tool selected. Enters `AWAITING_APPROVAL`. No pre-approval tool execution. UI displays deployment ID, platform, and high-risk warning. | ✅ Verified |
 | **3. Reject Approval** | User clicks **Reject Action** on pending approval card. | Action item and workflow status updated to `REJECTED`. Protected tool is **never called** (0 tool executions). | ✅ Verified |
